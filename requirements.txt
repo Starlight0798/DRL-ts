@@ -1,5 +1,16 @@
+--index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
 torch
 numpy
 tianshou
 pettingzoo
 loguru
+gym
+swig
+gymnasium
+gymnasium[accept-rom-license]
+gymnasium[atari]
+gymnasium[mujoco]
+gymnasium[box2d]
+flappy-bird-gymnasium
+tensorboard
