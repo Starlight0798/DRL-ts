@@ -65,7 +65,6 @@ def get_args() -> argparse.Namespace:
 
 @loguru_logger.catch()
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
-    loguru_logger.error(envpool.list_all_envs())
     env = gym.make(args.task)
     assert isinstance(env.action_space, gym.spaces.Discrete)
     train_envs = envpool.make_gymnasium(args.task, num_envs=args.training_num)
