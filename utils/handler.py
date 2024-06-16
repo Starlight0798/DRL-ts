@@ -15,5 +15,15 @@ def raise_warning():
         exit(0)
         
     warnings.showwarning = warning_handler
+    
+    
+    
+def print(*args, **kwargs):
+    '''
+    Print to loguru logger.
+    '''
+    sep = kwargs.pop('sep', ' ')
+    end = kwargs.pop('end', '\n')
+    logger.info(sep.join(map(str, args)) + end)
 
 
