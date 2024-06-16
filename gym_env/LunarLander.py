@@ -5,6 +5,7 @@ import sys
 import gymnasium as gym
 import numpy as np
 import torch
+import envpool
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -36,11 +37,11 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[256, 256])
-    parser.add_argument("--epoch", type=int, default=100)
+    parser.add_argument("--epoch", type=int, default=200)
     parser.add_argument("--step-per-epoch", type=int, default=50000)
-    parser.add_argument("--step-per-collect", type=int, default=50)
+    parser.add_argument("--step-per-collect", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--training-num", type=int, default=50)
+    parser.add_argument("--training-num", type=int, default=10)
     parser.add_argument("--test-num", type=int, default=10)
     parser.add_argument("--rew-norm", type=int, default=False)
     parser.add_argument("--logdir", type=str, default="log")
@@ -64,9 +65,10 @@ def get_args() -> argparse.Namespace:
 
 @loguru_logger.catch()
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
+    loguru_logger.error(envpool.list_all_envs())
     env = gym.make(args.task)
     assert isinstance(env.action_space, gym.spaces.Discrete)
-    train_envs = DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.training_num)])
+    train_envs = envpool.make_gymnasium(args.task, num_envs=args.training_num)
     test_envs = DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.test_num)])
     
     # get observation and action space info
