@@ -6,3 +6,11 @@ For personal learning and research only.
 - Mujoco
 - Multi-agent(Pettingzoo)
 - gymnasium
+
+## Usage
+
+```shell
+pip install -r requirements-base.txt
+pip install -r requirements.txt
+```
+
