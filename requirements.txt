@@ -1,6 +1,6 @@
 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
-tianshou
+git+https://github.com/thu-ml/tianshou.git@master
 pettingzoo
 loguru
 gym
