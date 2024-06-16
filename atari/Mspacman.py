@@ -39,10 +39,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--alpha-lr", type=float, default=5e-4)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=100000)
-    parser.add_argument("--step-per-collect", type=int, default=64)
+    parser.add_argument("--step-per-collect", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--hidden-size", type=int, default=512)
-    parser.add_argument("--training-num", type=int, default=64)
+    parser.add_argument("--training-num", type=int, default=50)
     parser.add_argument("--test-num", type=int, default=10)
     parser.add_argument("--rew-norm", type=int, default=False)
     parser.add_argument("--logdir", type=str, default="log")
@@ -110,6 +110,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         features_only=True,
         output_dim_added_layer=args.hidden_size,
     )
+    loguru_logger.info(f'Net structure: \n' + str(net))
     actor = Actor(net, args.action_shape, device=args.device, softmax_output=False)
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
     critic1 = Critic(net, last_size=args.action_shape, device=args.device)

@@ -37,10 +37,10 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--start-timesteps", type=int, default=32000)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=100000)
-    parser.add_argument("--step-per-collect", type=int, default=64)
+    parser.add_argument("--step-per-collect", type=int, default=50)
     parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=256)
-    parser.add_argument("--training-num", type=int, default=64)
+    parser.add_argument("--training-num", type=int, default=50)
     parser.add_argument("--test-num", type=int, default=10)
     parser.add_argument("--logdir", type=str, default="log")
     parser.add_argument("--render", type=float, default=0.0)
@@ -60,7 +60,7 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-@loguru_logger.catch(reraise=True)
+@loguru_logger.catch()
 def run_sac(args: argparse.Namespace = get_args()) -> None:
     env, train_envs, test_envs = make_mujoco_env(
         args.task,
@@ -82,6 +82,7 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     
     # model
     net_a = Net(state_shape=args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    loguru_logger.info(f'Net_a structure: \n' + str(net_a))
     actor = ActorProb(
         net_a,
         args.action_shape,
@@ -97,6 +98,7 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         concat=True,
         device=args.device,
     ) for _ in range(2)]
+    loguru_logger.info(f'Net_c structure: \n' + str(net_c))
     critic1 = Critic(net_c1, device=args.device).to(args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
     critic2 = Critic(net_c2, device=args.device).to(args.device)

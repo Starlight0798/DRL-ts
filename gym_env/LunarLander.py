@@ -38,9 +38,9 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[256, 256])
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=50000)
-    parser.add_argument("--step-per-collect", type=int, default=64)
+    parser.add_argument("--step-per-collect", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--training-num", type=int, default=64)
+    parser.add_argument("--training-num", type=int, default=50)
     parser.add_argument("--test-num", type=int, default=10)
     parser.add_argument("--rew-norm", type=int, default=False)
     parser.add_argument("--logdir", type=str, default="log")
@@ -62,7 +62,7 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-@loguru_logger.catch(reraise=True)
+@loguru_logger.catch()
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     env = gym.make(args.task)
     assert isinstance(env.action_space, gym.spaces.Discrete)
@@ -88,6 +88,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         hidden_sizes=args.hidden_sizes,
         device=args.device,
     ) for _ in range(3)]
+    loguru_logger.info(f'Net structure: \n' + str(net_a))
     actor = Actor(net_a, args.action_shape, device=args.device, softmax_output=False)
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
     critic1 = Critic(net_c1, last_size=args.action_shape, device=args.device)
