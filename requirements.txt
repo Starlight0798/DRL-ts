@@ -12,5 +12,5 @@ gymnasium[accept-rom-license]
 gymnasium[atari]
 gymnasium[mujoco]
 gymnasium[box2d]
-flappy-bird-gymnasium
 tensorboard
+flappy-bird-gymnasium
