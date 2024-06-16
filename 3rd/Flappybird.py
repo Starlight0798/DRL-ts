@@ -12,13 +12,13 @@ from tianshou.policy import DiscreteSACPolicy
 from tianshou.policy.base import BasePolicy
 from tianshou.trainer import OffpolicyTrainer
 from tianshou.utils.net.discrete import Actor, Critic
-from tianshou.utils.net.common import Net
 from tianshou.utils.space_info import SpaceInfo
 from loguru import logger as loguru_logger
 import flappy_bird_gymnasium
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.model import PSCN, MLP
 # from utils.handler import raise_warning
 # raise_warning()
 
@@ -36,7 +36,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
-    parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[512, 512])
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=100000)
     parser.add_argument("--step-per-collect", type=int, default=10)
@@ -63,6 +62,25 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+class Net(torch.nn.Module):
+    def __init__(self, state_shape, action_shape, device):
+        super().__init__()
+        self.model = torch.nn.Sequential(
+            PSCN(np.prod(state_shape), 512),
+            MLP([512, 128, np.prod(action_shape)])
+        )
+        self.output_dim = np.prod(action_shape)
+        self.device = device
+
+    def forward(self, obs, state=None, info={}):
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+        batch = obs.shape[0]
+        logits = self.model(obs.view(batch, -1))
+        return logits, state
+
+
+
 @loguru_logger.catch()
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     env = gym.make(args.task)
@@ -86,7 +104,6 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     net_a, net_c1, net_c2 = [Net(
         state_shape=args.state_shape,
         action_shape=args.action_shape,
-        hidden_sizes=args.hidden_sizes,
         device=args.device,
     ) for _ in range(3)]
     loguru_logger.info(f'Net structure: \n' + str(net_a))
