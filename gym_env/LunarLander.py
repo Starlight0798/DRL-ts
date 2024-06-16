@@ -18,6 +18,7 @@ from loguru import logger as loguru_logger
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.model import PSCN, MLP
 # from utils.handler import raise_warning
 # raise_warning()
 
@@ -62,6 +63,24 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+class Net(torch.nn.Module):
+    def __init__(self, state_shape, action_shape, device):
+        super().__init__()
+        self.model = torch.nn.Sequential(
+            PSCN(np.prod(state_shape), 256),
+            MLP([256, 64, np.prod(action_shape)])
+        )
+        self.output_dim = np.prod(action_shape)
+        self.device = device
+
+    def forward(self, obs, state=None, info={}):
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.tensor(obs, dtype=torch.float, device=self.device)
+        batch = obs.shape[0]
+        logits = self.model(obs.view(batch, -1))
+        return logits, state
+
+
 @loguru_logger.catch()
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     env = gym.make(args.task)
@@ -85,7 +104,6 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     net_a, net_c1, net_c2 = [Net(
         state_shape=args.state_shape,
         action_shape=args.action_shape,
-        hidden_sizes=args.hidden_sizes,
         device=args.device,
     ) for _ in range(3)]
     loguru_logger.info(f'Net structure: \n' + str(net_a))
