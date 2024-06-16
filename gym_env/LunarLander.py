@@ -5,7 +5,6 @@ import sys
 import gymnasium as gym
 import numpy as np
 import torch
-import envpool
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -67,7 +66,7 @@ def get_args() -> argparse.Namespace:
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     env = gym.make(args.task)
     assert isinstance(env.action_space, gym.spaces.Discrete)
-    train_envs = envpool.make_gymnasium(args.task, num_envs=args.training_num)
+    train_envs = DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.test_num)])
     
     # get observation and action space info
