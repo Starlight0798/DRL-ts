@@ -3,6 +3,7 @@
 git+https://github.com/thu-ml/tianshou.git@master
 pettingzoo
 loguru
+opencv-python
 gym
 gymnasium
 gymnasium[accept-rom-license]
