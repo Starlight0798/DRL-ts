@@ -6,18 +6,17 @@ import os, sys
 import numpy as np
 import torch
 from mujoco_env import make_mujoco_env
-from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
+from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.highlevel.logger import LoggerFactoryDefault
 from tianshou.policy import SACPolicy
 from tianshou.policy.base import BasePolicy
 from tianshou.trainer import OffpolicyTrainer
-from tianshou.utils.net.common import Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 from loguru import logger as loguru_logger
-print = loguru_logger.info
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.model import PSCN, MLP
 # from utils.handler import raise_warning
 # raise_warning()
 
@@ -26,7 +25,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--task", type=str, default="HalfCheetah-v4")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--buffer-size", type=int, default=100000)
-    parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[512, 512])
     parser.add_argument("--actor-lr", type=float, default=5e-4)
     parser.add_argument("--critic-lr", type=float, default=1e-3)
     parser.add_argument("--gamma", type=float, default=0.99)
@@ -58,6 +56,28 @@ def get_args() -> argparse.Namespace:
         help="watch the play of pre-trained policy only",
     )
     return parser.parse_args()
+    
+    
+class Net(torch.nn.Module):
+    def __init__(self, state_shape, action_shape, device, concat):
+        super().__init__()
+        input_dim = np.prod(state_shape)
+        if concat:
+            input_dim += np.prod(action_shape)
+        self.model = torch.nn.Sequential(
+            PSCN(input_dim, 256),
+            MLP([256, 256, 256], last_act=True)
+        )
+        self.output_dim = 256
+        self.device = device
+
+    def forward(self, obs, state=None, info={}):
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+        batch = obs.shape[0]
+        logits = self.model(obs.view(batch, -1))
+        return logits, state
+    
 
 
 @loguru_logger.catch()
@@ -81,7 +101,12 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     torch.manual_seed(args.seed)
     
     # model
-    net_a = Net(state_shape=args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    net_a = Net(
+        state_shape=args.state_shape, 
+        action_shape=args.action_shape,
+        device=args.device,
+        concat=False
+    )
     loguru_logger.info(f'Net_a structure: \n' + str(net_a))
     actor = ActorProb(
         net_a,
@@ -92,13 +117,12 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     ).to(args.device)
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
     net_c1, net_c2 = [Net(
-        state_shape=args.state_shape,
+        state_shape=args.state_shape, 
         action_shape=args.action_shape,
-        hidden_sizes=args.hidden_sizes,
-        concat=True,
         device=args.device,
+        concat=True
     ) for _ in range(2)]
-    loguru_logger.info(f'Net_c structure: \n' + str(net_c))
+    loguru_logger.info(f'Net_c structure: \n' + str(net_c1))
     critic1 = Critic(net_c1, device=args.device).to(args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
     critic2 = Critic(net_c2, device=args.device).to(args.device)
@@ -131,11 +155,7 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         loguru_logger.info(f"Loaded agent from: {load_path}")
 
     # collector
-    buffer: VectorReplayBuffer | ReplayBuffer
-    if args.training_num > 1:
-        buffer = VectorReplayBuffer(args.buffer_size, len(train_envs))
-    else:
-        buffer = ReplayBuffer(args.buffer_size)
+    buffer = VectorReplayBuffer(args.buffer_size, len(train_envs))
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs)
     train_collector.reset()
