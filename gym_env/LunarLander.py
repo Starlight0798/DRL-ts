@@ -12,7 +12,6 @@ from tianshou.policy import DiscreteSACPolicy
 from tianshou.policy.base import BasePolicy
 from tianshou.trainer import OffpolicyTrainer
 from tianshou.utils.net.discrete import Actor, Critic
-from tianshou.utils.net.common import Net
 from tianshou.utils.space_info import SpaceInfo
 from loguru import logger as loguru_logger
 
@@ -36,7 +35,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
-    parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[256, 256])
     parser.add_argument("--epoch", type=int, default=200)
     parser.add_argument("--step-per-epoch", type=int, default=50000)
     parser.add_argument("--step-per-collect", type=int, default=10)
@@ -75,7 +73,7 @@ class Net(torch.nn.Module):
 
     def forward(self, obs, state=None, info={}):
         if not isinstance(obs, torch.Tensor):
-            obs = torch.tensor(obs, dtype=torch.float, device=self.device)
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
         batch = obs.shape[0]
         logits = self.model(obs.view(batch, -1))
         return logits, state
