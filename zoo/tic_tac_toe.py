@@ -132,6 +132,7 @@ def get_agents(
             discount_factor=args.gamma,
             target_update_freq=args.target_update_freq,
         )
+        # It doesn't matter if model fails to load
         with loguru_logger.catch():
             if args.resume_path:
                 agent_learn.load_state_dict(torch.load(args.resume_path))
