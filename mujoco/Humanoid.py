@@ -64,9 +64,9 @@ class Net(torch.nn.Module):
             input_dim += np.prod(action_shape)
         self.model = torch.nn.Sequential(
             PSCN(input_dim, 1024),
-            MLP([1024, 1024], last_act=True)
+            MLP([1024, 1024, 128], last_act=True)
         )
-        self.output_dim = 1024
+        self.output_dim = 128
         self.device = device
 
     def forward(self, obs, state=None, info={}):
@@ -106,7 +106,6 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         device=args.device,
         concat=False
     )
-    loguru_logger.info(f'Net_a structure: \n' + str(net_a))
     actor = ActorProb(
         net_a,
         args.action_shape,
@@ -114,6 +113,7 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         unbounded=True,
         conditioned_sigma=True,
     ).to(args.device)
+    loguru_logger.info(f'Actor structure: \n' + str(actor))
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
     net_c1, net_c2 = [Net(
         state_shape=args.state_shape, 
@@ -121,11 +121,11 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         device=args.device,
         concat=True
     ) for _ in range(2)]
-    loguru_logger.info(f'Net_c structure: \n' + str(net_c1))
     critic1 = Critic(net_c1, device=args.device).to(args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
     critic2 = Critic(net_c2, device=args.device).to(args.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
+    loguru_logger.info(f'Critic structure: \n' + str(critic1))
 
     if args.auto_alpha:
         target_entropy = -np.prod(env.action_space.shape)

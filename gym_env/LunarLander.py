@@ -65,9 +65,9 @@ class Net(torch.nn.Module):
         super().__init__()
         self.model = torch.nn.Sequential(
             PSCN(np.prod(state_shape), 256),
-            MLP([256, 64, np.prod(action_shape)])
+            MLP([256, 256, 64], last_act=True)
         )
-        self.output_dim = np.prod(action_shape)
+        self.output_dim = 64
         self.device = device
 
     def forward(self, obs, state=None, info={}):
@@ -103,13 +103,14 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         action_shape=args.action_shape,
         device=args.device,
     ) for _ in range(3)]
-    loguru_logger.info(f'Net structure: \n' + str(net_a))
     actor = Actor(net_a, args.action_shape, device=args.device, softmax_output=False)
+    loguru_logger.info(f'Actor structure: \n' + str(actor))
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
     critic1 = Critic(net_c1, last_size=args.action_shape, device=args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
     critic2 = Critic(net_c2, last_size=args.action_shape, device=args.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
+    loguru_logger.info(f'Critic structure: \n' + str(critic1))
 
     # define policy
     if args.auto_alpha:
