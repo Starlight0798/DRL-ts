@@ -1,5 +1,4 @@
 import argparse
-import datetime
 import os
 import sys
 import gymnasium as gym
@@ -136,9 +135,8 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     ).to(args.device)
     
     # log
-    now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
     args.algo_name = "discrete_sac"
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
     log_path = os.path.join(args.logdir, log_name)
         
     # load a previous policy

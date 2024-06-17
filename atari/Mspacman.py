@@ -1,13 +1,10 @@
 import argparse
-import datetime
 import os
 import sys
-
 import numpy as np
 import torch
 from atari_network import DQN
 from atari_wrapper import make_atari_env
-
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.highlevel.logger import LoggerFactoryDefault
 from tianshou.policy import DiscreteSACPolicy, ICMPolicy
@@ -180,9 +177,8 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     test_collector = Collector(policy, test_envs, exploration_noise=True)
 
     # log
-    now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
     args.algo_name = "discrete_sac_icm" if args.icm_lr_scale > 0 else "discrete_sac"
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
     log_path = os.path.join(args.logdir, log_name)
     
 
