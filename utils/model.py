@@ -120,12 +120,13 @@ class DepthwiseSeparableConv(nn.Module):
 class ConvBlock(nn.Module):
     def __init__(self,
                  channels: list[tuple],
+                 kernel_size: list[int],
+                 stride: list[int],
+                 padding: list[int],
                  output_dim,
                  input_shape=(3, 84, 84),
-                 kernel_size=3,
-                 stride=1,
-                 padding=2,
-                 use_depthwise=True,
+                 use_norm=False,
+                 use_depthwise=False,
                  activation=nn.ReLU(inplace=True)
                  ):
         super(ConvBlock, self).__init__()
@@ -134,16 +135,17 @@ class ConvBlock(nn.Module):
             if use_depthwise:
                 self.conv_layers.add_module(f'conv_dw_{i}', DepthwiseSeparableConv(in_channels,
                                                                                    out_channels,
-                                                                                   kernel_size,
-                                                                                   stride,
-                                                                                   padding))
+                                                                                   kernel_size[i],
+                                                                                   stride[i],
+                                                                                   padding[i]))
             else:
                 self.conv_layers.add_module(f'conv_{i}', nn.Conv2d(in_channels,
                                                                    out_channels,
-                                                                   kernel_size,
-                                                                   stride,
-                                                                   padding))
-            self.conv_layers.add_module(f'bn_{i}', nn.BatchNorm2d(out_channels))
+                                                                   kernel_size[i],
+                                                                   stride[i],
+                                                                   padding[i]))
+            if use_norm:
+                self.conv_layers.add_module(f'bn_{i}', nn.BatchNorm2d(out_channels))
             self.conv_layers.add_module(f'act_{i}', activation)
             self.conv_layers.add_module(f'pool_{i}', nn.MaxPool2d(kernel_size=(2, 2)))
             
