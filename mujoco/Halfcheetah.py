@@ -167,21 +167,21 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
     log_path = os.path.join(args.logdir, log_name)
 
-    # logger
-    logger_factory = LoggerFactoryDefault()
-    logger_factory.logger_type = "tensorboard"
-    logger = logger_factory.create_logger(
-        log_dir=log_path,
-        experiment_name=log_name,
-        run_id=args.resume_id,
-        config_dict=vars(args),
-    )
-
     def save_best_fn(policy: BasePolicy) -> None:
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))
         loguru_logger.info(f"Saved best policy to {log_path}")
 
     if not args.watch:
+        # logger
+        logger_factory = LoggerFactoryDefault()
+        logger_factory.logger_type = "tensorboard"
+        logger = logger_factory.create_logger(
+            log_dir=log_path,
+            experiment_name=log_name,
+            run_id=args.resume_id,
+            config_dict=vars(args),
+        )
+        
         # trainer
         result = OffpolicyTrainer(
             policy=policy,

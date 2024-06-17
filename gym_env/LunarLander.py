@@ -138,16 +138,6 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     args.algo_name = "discrete_sac"
     log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
     log_path = os.path.join(args.logdir, log_name)
-    
-    # logger
-    logger_factory = LoggerFactoryDefault()
-    logger_factory.logger_type = "tensorboard"
-    logger = logger_factory.create_logger(
-        log_dir=log_path,
-        experiment_name=log_name,
-        run_id=args.resume_id,
-        config_dict=vars(args),
-    )
         
     # load a previous policy
     if args.resume_path:
@@ -210,6 +200,16 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     # test train_collector and start filling replay buffer
     train_collector.reset()
     train_collector.collect(n_step=args.batch_size * args.training_num)
+    
+    # logger
+    logger_factory = LoggerFactoryDefault()
+    logger_factory.logger_type = "tensorboard"
+    logger = logger_factory.create_logger(
+        log_dir=log_path,
+        experiment_name=log_name,
+        run_id=args.resume_id,
+        config_dict=vars(args),
+    )
     
     # trainer
     result = OffpolicyTrainer(
