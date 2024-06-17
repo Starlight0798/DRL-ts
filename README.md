@@ -9,6 +9,16 @@ For personal learning and research only.
 
 ## Usage
 
+Firstly, Install `tianshou`:
+
+```shell
+git clone https://github.com/thu-ml/tianshou.git
+cd tianshou
+pip install .
+```
+
+Then install the necessity:
+
 ```shell
 pip install -r requirements-base.txt
 pip install -r requirements.txt
