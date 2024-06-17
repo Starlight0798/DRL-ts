@@ -56,7 +56,6 @@ def get_args() -> argparse.Namespace:
         action="store_true",
         help="watch the play of pre-trained policy only",
     )
-    parser.add_argument("--save-buffer-name", type=str, default=None)
     return parser.parse_args()
 
 
@@ -186,21 +185,9 @@ def run_continuous_sac(args: argparse.Namespace = get_args()) -> None:
     def watch() -> None:
         loguru_logger.info("Setup test envs ...")
         test_envs.seed(args.seed)
-        if args.save_buffer_name:
-            loguru_logger.info(f"Generate buffer with size {args.buffer_size}")
-            buffer = VectorReplayBuffer(
-                total_size=args.buffer_size, 
-                buffer_num=args.test_num
-            )
-            collector = Collector(policy, test_envs, buffer, exploration_noise=True)
-            result = collector.collect(n_step=args.buffer_size)
-            loguru_logger.info(f"Save buffer into {args.save_buffer_name}")
-            # Unfortunately, pickle will cause oom with 1M buffer size
-            buffer.save_hdf5(args.save_buffer_name)
-        else:
-            loguru_logger.info("Testing agent ...")
-            test_collector.reset()
-            result = test_collector.collect(n_episode=args.test_num, render=args.render)
+        loguru_logger.info("Testing agent ...")
+        test_collector.reset()
+        result = test_collector.collect(n_episode=args.test_num, render=args.render)
         result.pprint_asdict()
 
     if args.watch:
