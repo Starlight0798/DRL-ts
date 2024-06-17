@@ -1,6 +1,5 @@
 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
-git+https://github.com/thu-ml/tianshou.git@master
 pettingzoo
 loguru
 opencv-python
