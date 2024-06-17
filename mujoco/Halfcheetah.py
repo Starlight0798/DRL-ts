@@ -92,6 +92,7 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
     args.max_action = env.action_space.high[0]
+    args.algo_name = "sac"
     loguru_logger.info(f"Observations shape: {args.state_shape}")
     loguru_logger.info(f"Actions shape: {args.action_shape}")
     loguru_logger.info(f"Action range: {np.min(env.action_space.low)}, {np.max(env.action_space.high)}")
@@ -163,7 +164,6 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
 
     # log
     now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
-    args.algo_name = "sac"
     log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
     log_path = os.path.join(args.logdir, log_name)
 
