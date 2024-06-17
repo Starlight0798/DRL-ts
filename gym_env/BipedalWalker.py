@@ -108,12 +108,18 @@ def run_continuous_sac(args: argparse.Namespace = get_args()) -> None:
         device=args.device,
         concat=(i > 0)
     ) for i in range(3)]
-    actor = ActorProb(net_a, args.action_shape, device=args.device, unbounded=True)
+    actor = ActorProb(
+        net_a,
+        args.action_shape,
+        device=args.device,
+        unbounded=True,
+        conditioned_sigma=True,
+    ).to(args.device)
     loguru_logger.info(f'Actor structure: \n' + str(actor))
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
-    critic1 = Critic(net_c1, device=args.device)
+    critic1 = Critic(net_c1, device=args.device).to(args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
-    critic2 = Critic(net_c2, device=args.device)
+    critic2 = Critic(net_c2, device=args.device).to(args.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
     loguru_logger.info(f'Critic structure: \n' + str(critic1))
 

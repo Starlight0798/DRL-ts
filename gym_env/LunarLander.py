@@ -119,7 +119,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         alpha_optim = torch.optim.Adam([log_alpha], lr=args.alpha_lr)
         args.alpha = (target_entropy, log_alpha, alpha_optim)
 
-    policy: DiscreteSACPolicy  = DiscreteSACPolicy(
+    policy: DiscreteSACPolicy = DiscreteSACPolicy(
         actor=actor,
         actor_optim=actor_optim,
         critic=critic1,
