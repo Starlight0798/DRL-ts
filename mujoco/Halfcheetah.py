@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-
 import argparse
-import datetime
 import os, sys
 import numpy as np
 import torch
+import gymnasium as gym
 from mujoco_env import make_mujoco_env
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -48,7 +46,7 @@ def get_args() -> argparse.Namespace:
         default="cuda" if torch.cuda.is_available() else "cpu",
     )
     parser.add_argument("--resume-path", type=str, default=None)
-    parser.add_argument("--resume-id", type=str, default=None)
+    parser.add_argument("--resume-id", type=str, default="1")
     parser.add_argument(
         "--watch",
         default=False,
@@ -159,51 +157,59 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     buffer = VectorReplayBuffer(args.buffer_size, len(train_envs))
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs)
-    train_collector.reset()
-    train_collector.collect(n_step=args.start_timesteps, random=True)
 
     # log
-    now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
     log_path = os.path.join(args.logdir, log_name)
 
     def save_best_fn(policy: BasePolicy) -> None:
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))
         loguru_logger.info(f"Saved best policy to {log_path}")
-
-    if not args.watch:
-        # logger
-        logger_factory = LoggerFactoryDefault()
-        logger_factory.logger_type = "tensorboard"
-        logger = logger_factory.create_logger(
-            log_dir=log_path,
-            experiment_name=log_name,
-            run_id=args.resume_id,
-            config_dict=vars(args),
-        )
+    
         
-        # trainer
-        result = OffpolicyTrainer(
-            policy=policy,
-            train_collector=train_collector,
-            test_collector=test_collector,
-            max_epoch=args.epoch,
-            step_per_epoch=args.step_per_epoch,
-            step_per_collect=args.step_per_collect,
-            episode_per_test=args.test_num,
-            batch_size=args.batch_size,
-            save_best_fn=save_best_fn,
-            logger=logger,
-            update_per_step=1 / args.step_per_collect,
-            test_in_train=False,
-        ).run()
-        loguru_logger.info(result)
+    def watch() -> None:
+        loguru_logger.info("Setup test envs ...")
+        test_envs.seed(args.seed)
+        loguru_logger.info("Testing agent ...")
+        test_collector.reset()
+        result = test_collector.collect(n_episode=args.test_num, render=args.render)
+        result.pprint_asdict()
 
-    # Let's watch its performance!
-    test_envs.seed(args.seed)
-    test_collector.reset()
-    collector_stats = test_collector.collect(n_episode=args.test_num, render=args.render)
-    loguru_logger.info(collector_stats)
+
+    if args.watch:
+        watch()
+        sys.exit(0)
+        
+    train_collector.reset()
+    train_collector.collect(n_step=args.start_timesteps, random=True)    
+    
+    # logger
+    logger_factory = LoggerFactoryDefault()
+    logger_factory.logger_type = "tensorboard"
+    logger = logger_factory.create_logger(
+        log_dir=log_path,
+        experiment_name=log_name,
+        run_id=args.resume_id,
+        config_dict=vars(args),
+    )
+    
+    # trainer
+    result = OffpolicyTrainer(
+        policy=policy,
+        train_collector=train_collector,
+        test_collector=test_collector,
+        max_epoch=args.epoch,
+        step_per_epoch=args.step_per_epoch,
+        step_per_collect=args.step_per_collect,
+        episode_per_test=args.test_num,
+        batch_size=args.batch_size,
+        save_best_fn=save_best_fn,
+        logger=logger,
+        update_per_step=1 / args.step_per_collect,
+        resume_from_log=args.resume_id is not None,
+        test_in_train=False,
+    ).run()
+    loguru_logger.info(result)
 
 
 if __name__ == "__main__":
