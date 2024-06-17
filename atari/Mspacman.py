@@ -26,7 +26,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--scale-obs", type=int, default=0)
     parser.add_argument("--buffer-size", type=int, default=100000)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
-    parser.add_argument("--critic-lr", type=float, default=3e-4)
+    parser.add_argument("--critic-lr", type=float, default=5e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--tau", type=float, default=0.005)
