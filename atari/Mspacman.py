@@ -3,7 +3,6 @@ import os
 import sys
 import numpy as np
 import torch
-from atari_network import DQN
 from atari_wrapper import make_atari_env
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -15,15 +14,43 @@ from loguru import logger as loguru_logger
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.model import PSCN, MLP, ConvBlock
 # from utils.handler import raise_warning
 # raise_warning()
+
+class Net(torch.nn.Module):
+    def __init__(self, state_shape, action_shape, device):
+        super().__init__()
+        self.model = ConvBlock(
+            channels=[(state_shape[0], 32), (32, 64), (64, 64)],
+            kernel_size=[5, 3, 3],
+            stride=[2, 1, 1],
+            padding=[4, 2, 2],
+            output_dim=512,
+            input_shape=state_shape,
+            use_depthwise=True,
+        )
+        self.model = torch.nn.Sequential(
+            self.model,
+            PSCN(512, 512),
+            MLP([512, 128], last_act=True)
+        )
+        self.output_dim = 128
+        self.device = device
+
+    def forward(self, obs, state=None, info={}):
+        if not isinstance(obs, torch.Tensor):
+            obs = torch.tensor(obs, dtype=torch.float32, device=self.device)
+        logits = self.model(obs)
+        return logits, state
+
 
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="MsPacmanNoFrameskip-v4")
     parser.add_argument("--seed", type=int, default=4213)
-    parser.add_argument("--scale-obs", type=int, default=0)
+    parser.add_argument("--scale-obs", type=int, default=1)
     parser.add_argument("--buffer-size", type=int, default=100000)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
     parser.add_argument("--critic-lr", type=float, default=5e-4)
@@ -38,8 +65,8 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--step-per-collect", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--hidden-size", type=int, default=512)
-    parser.add_argument("--training-num", type=int, default=10)
-    parser.add_argument("--test-num", type=int, default=10)
+    parser.add_argument("--training-num", type=int, default=1)
+    parser.add_argument("--test-num", type=int, default=1)
     parser.add_argument("--rew-norm", type=int, default=False)
     parser.add_argument("--logdir", type=str, default="log")
     parser.add_argument("--render", type=float, default=0.0)
@@ -99,20 +126,19 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     torch.manual_seed(args.seed)
     
     # define model
-    net = DQN(
-        *args.state_shape,
+    net = Net(
+        args.state_shape,
         args.action_shape,
         device=args.device,
-        features_only=True,
-        output_dim_added_layer=args.hidden_size,
     )
-    loguru_logger.info(f'Net structure: \n' + str(net))
     actor = Actor(net, args.action_shape, device=args.device, softmax_output=False)
+    loguru_logger.info(f'Actor structure: \n' + str(actor))
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
     critic1 = Critic(net, last_size=args.action_shape, device=args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
     critic2 = Critic(net, last_size=args.action_shape, device=args.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
+    loguru_logger.info(f'Critic structure: \n' + str(critic1))
 
     # define policy
     if args.auto_alpha:
