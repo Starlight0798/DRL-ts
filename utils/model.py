@@ -238,14 +238,14 @@ class MultiHeadAttention(nn.Module):
 
 # 一种兼顾宽度和深度的全连接层，提取信息效率更高
 class PSCN(nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, linear=nn.Linear):
         super(PSCN, self).__init__()
         assert output_dim >= 32 and output_dim % 8 == 0, "output_dim must be >= 32 and divisible by 8"
         self.hidden_dim = output_dim
-        self.fc1 = MLP([input_dim, self.hidden_dim], last_act=True)
-        self.fc2 = MLP([self.hidden_dim // 2, self.hidden_dim // 2], last_act=True)
-        self.fc3 = MLP([self.hidden_dim // 4, self.hidden_dim // 4], last_act=True)
-        self.fc4 = MLP([self.hidden_dim // 8, self.hidden_dim // 8], last_act=True)
+        self.fc1 = MLP([input_dim, self.hidden_dim], last_act=True, linear=linear)
+        self.fc2 = MLP([self.hidden_dim // 2, self.hidden_dim // 2], last_act=True, linear=linear)
+        self.fc3 = MLP([self.hidden_dim // 4, self.hidden_dim // 4], last_act=True, linear=linear)
+        self.fc4 = MLP([self.hidden_dim // 8, self.hidden_dim // 8], last_act=True, linear=linear)
 
     def forward(self, x):
         _shape = x.shape
