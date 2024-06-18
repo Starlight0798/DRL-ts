@@ -130,16 +130,9 @@ def get_agents(
         else env.observation_space
     )
     
-    # log
-    args.task = 'tic_tac_toe'
-    args.algo_name = 'rainbow'
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
-    log_path = os.path.join(args.logdir, log_name)
-    
     args.state_shape = observation_space.shape or int(observation_space.n)
     args.action_shape = env.action_space.shape or int(env.action_space.n)
     
-    loguru_logger.add(os.path.join(log_path, "model.log"), rotation="1 MB", retention="10 days", level="DEBUG")
     loguru_logger.info(f"Observations shape: {args.state_shape}")
     loguru_logger.info(f"Actions shape: {args.action_shape}")
     
@@ -204,6 +197,13 @@ def train_agent(
 ) -> tuple[InfoStats, BasePolicy]:
     train_envs = DummyVectorEnv([get_env for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([get_env for _ in range(args.test_num)])
+    
+    # log
+    args.task = 'tic_tac_toe'
+    args.algo_name = 'rainbow'
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
+    log_path = os.path.join(args.logdir, log_name)
+    loguru_logger.add(os.path.join(log_path, "model.log"), rotation="1 MB", retention="10 days", level="DEBUG")
     
     # seed
     np.random.seed(args.seed)
