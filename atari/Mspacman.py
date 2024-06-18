@@ -117,6 +117,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         args.test_num,
         scale=args.scale_obs,
         frame_stack=args.frames_stack,
+        create_watch_env=args.watch,
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n

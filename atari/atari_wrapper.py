@@ -375,6 +375,7 @@ def make_atari_env(
     test_num: int,
     scale: int | bool = False,
     frame_stack: int = 4,
+    create_watch_env: bool = False,
 ) -> tuple[Env, BaseVectorEnv, BaseVectorEnv]:
     """Wrapper function for Atari env.
 
@@ -383,7 +384,7 @@ def make_atari_env(
     :return: a tuple of (single env, training envs, test envs).
     """
     env_factory = AtariEnvFactory(task, seed, seed + training_num, frame_stack, scale=bool(scale))
-    envs = env_factory.create_envs(training_num, test_num, create_watch_env=True)
+    envs = env_factory.create_envs(training_num, test_num, create_watch_env=create_watch_env)
     return envs.env, envs.train_envs, envs.test_envs, envs.watch_env
 
 
