@@ -271,7 +271,7 @@ def train_agent(
     def save_checkpoint_fn(epoch: int, env_step: int, gradient_step: int) -> str:
         agent_learn = policy.policies[agents[args.agent_id]]
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
-        torch.save(agent_learn.state_dict(), ckpt_path)
+        torch.save({'model': agent_learn.state_dict()}, ckpt_path)
         loguru_logger.info(f"Epoch: {epoch}, EnvStep: {env_step}, GradientStep: {gradient_step}, Saved checkpoint to {ckpt_path}")
         return ckpt_path
 
@@ -313,7 +313,7 @@ def watch(
     
     collector = Collector(policy, env, exploration_noise=True)
     collector.reset()
-    result = collector.collect(n_episode=args.test_num, render=args.render)
+    result = collector.collect(n_episode=1, render=args.render)
     result.pprint_asdict()
     
     

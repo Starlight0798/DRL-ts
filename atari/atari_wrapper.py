@@ -383,8 +383,8 @@ def make_atari_env(
     :return: a tuple of (single env, training envs, test envs).
     """
     env_factory = AtariEnvFactory(task, seed, seed + training_num, frame_stack, scale=bool(scale))
-    envs = env_factory.create_envs(training_num, test_num)
-    return envs.env, envs.train_envs, envs.test_envs
+    envs = env_factory.create_envs(training_num, test_num, create_watch_env=True)
+    return envs.env, envs.train_envs, envs.test_envs, envs.watch_env
 
 
 class AtariEnvFactory(EnvFactoryRegistered):

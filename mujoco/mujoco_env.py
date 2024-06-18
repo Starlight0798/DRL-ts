@@ -2,8 +2,9 @@ from loguru import logger as log
 import pickle
 
 from gymnasium import Env
+import gymnasium as gym
 
-from tianshou.env import BaseVectorEnv, VectorEnvNormObs
+from tianshou.env import BaseVectorEnv, VectorEnvNormObs, DummyVectorEnv
 from tianshou.highlevel.env import (
     ContinuousEnvironments,
     EnvFactoryRegistered,
@@ -38,8 +39,10 @@ def make_mujoco_env(
     envs = MujocoEnvFactory(task, seed, seed + num_train_envs, obs_norm=obs_norm).create_envs(
         num_train_envs,
         num_test_envs,
+        create_watch_env=False
     )
-    return envs.env, envs.train_envs, envs.test_envs
+    envs.watch_env = DummyVectorEnv([lambda: gym.make(task, render_mode="rgb_array")])
+    return envs.env, envs.train_envs, envs.test_envs, envs.watch_env
 
 
 class MujocoEnvObsRmsPersistence(Persistence):

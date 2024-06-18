@@ -25,7 +25,7 @@ class Net(torch.nn.Module):
             channels=[(state_shape[0], 32), (32, 64), (64, 64)],
             kernel_size=[5, 3, 3],
             stride=[2, 1, 1],
-            padding=[4, 2, 2],
+            padding=[2, 1, 1],
             output_dim=512,
             input_shape=state_shape,
             use_depthwise=True,
@@ -106,7 +106,11 @@ def get_args() -> argparse.Namespace:
 
 
 def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
-    env, train_envs, test_envs = make_atari_env(
+    if args.watch:
+        args.training_num = 1
+        args.test_num = 1
+    
+    env, train_envs, test_envs, watch_env = make_atari_env(
         args.task,
         args.seed,
         args.training_num,
@@ -228,11 +232,12 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
 
     # watch agent's performance
     def watch() -> None:
-        loguru_logger.info("Setup test envs ...")
-        test_envs.seed(args.seed)
-        loguru_logger.info("Testing agent ...")
-        test_collector.reset()
-        result = test_collector.collect(n_episode=args.test_num, render=args.render)
+        loguru_logger.info("Setup watch envs ...")
+        watch_env.seed(args.seed)
+        watch_collector = Collector(policy, watch_env, exploration_noise=True)
+        watch_collector.reset()
+        loguru_logger.info("Watching agent ...")
+        result = watch_collector.collect(n_episode=1, render=args.render)
         result.pprint_asdict()
 
     if args.watch:

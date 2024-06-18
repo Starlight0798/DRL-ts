@@ -2,7 +2,6 @@ import argparse
 import os, sys
 import numpy as np
 import torch
-import gymnasium as gym
 from mujoco_env import make_mujoco_env
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.highlevel.logger import LoggerFactoryDefault
@@ -80,7 +79,11 @@ class Net(torch.nn.Module):
 
 @loguru_logger.catch()
 def run_sac(args: argparse.Namespace = get_args()) -> None:
-    env, train_envs, test_envs = make_mujoco_env(
+    if args.watch:
+        args.training_num = 1
+        args.test_num = 1
+        
+    env, train_envs, test_envs, watch_env = make_mujoco_env(
         args.task,
         args.seed,
         args.training_num,
@@ -172,11 +175,11 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     
         
     def watch() -> None:
-        loguru_logger.info("Setup test envs ...")
-        test_envs.seed(args.seed)
-        loguru_logger.info("Testing agent ...")
-        test_collector.reset()
-        result = test_collector.collect(n_episode=args.test_num, render=args.render)
+        loguru_logger.info("Setup watch envs ...")
+        watch_collector = Collector(policy, watch_env, exploration_noise=True)
+        watch_collector.reset()
+        loguru_logger.info("Watching agent ...")
+        result = watch_collector.collect(n_episode=1, render=args.render)
         result.pprint_asdict()
 
 
