@@ -116,7 +116,14 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
+    
+    # log
+    args.algo_name = "discrete_sac_icm" if args.icm_lr_scale > 0 else "discrete_sac"
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
+    log_path = os.path.join(args.logdir, log_name)
+    
     # should be N_FRAMES x H x W
+    loguru_logger.add(os.path.join(log_path, "model.log"), rotation="1 MB", retention="10 days", level="DEBUG")
     loguru_logger.info(f"Observations shape: {args.state_shape}")
     loguru_logger.info(f"Actions shape: {args.action_shape}")
     
@@ -200,11 +207,6 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     # collector
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs, exploration_noise=True)
-
-    # log
-    args.algo_name = "discrete_sac_icm" if args.icm_lr_scale > 0 else "discrete_sac"
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
-    log_path = os.path.join(args.logdir, log_name)
     
 
     def save_best_fn(policy: BasePolicy) -> None:
@@ -221,7 +223,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     def save_checkpoint_fn(epoch: int, env_step: int, gradient_step: int) -> str:
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
         torch.save({"model": policy.state_dict()}, ckpt_path)
-        loguru_logger.info(f"Saved checkpoint to {ckpt_path}")
+        loguru_logger.info(f"Epoch: {epoch}, EnvStep: {env_step}, GradientStep: {gradient_step}, Saved checkpoint to {ckpt_path}")
         return ckpt_path
 
     # watch agent's performance

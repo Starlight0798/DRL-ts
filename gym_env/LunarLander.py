@@ -84,11 +84,17 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     train_envs = DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([lambda: gym.make(args.task) for _ in range(args.test_num)])
     
+    # log
+    args.algo_name = "discrete_sac"
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
+    log_path = os.path.join(args.logdir, log_name)
+    
     # get observation and action space info
     space_info = SpaceInfo.from_env(env)
     args.state_shape = space_info.observation_info.obs_shape
     args.action_shape = space_info.action_info.action_shape
 
+    loguru_logger.add(os.path.join(log_path, "model.log"), rotation="1 MB", retention="10 days", level="DEBUG")
     loguru_logger.info(f"Observations shape: {args.state_shape}")
     loguru_logger.info(f"Actions shape: {args.action_shape}")
     
@@ -131,11 +137,6 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         alpha=args.alpha,
         estimation_step=args.n_step,
     ).to(args.device)
-    
-    # log
-    args.algo_name = "discrete_sac"
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
-    log_path = os.path.join(args.logdir, log_name)
         
     # load a previous policy
     if args.resume_path:
@@ -167,7 +168,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     def save_checkpoint_fn(epoch: int, env_step: int, gradient_step: int) -> str:
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
         torch.save({"model": policy.state_dict()}, ckpt_path)
-        loguru_logger.info(f"Saved checkpoint to {ckpt_path}")
+        loguru_logger.info(f"Epoch: {epoch}, EnvStep: {env_step}, GradientStep: {gradient_step}, Saved checkpoint to {ckpt_path}")
         return ckpt_path
 
     # watch agent's performance

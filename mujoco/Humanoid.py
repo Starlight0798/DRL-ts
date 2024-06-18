@@ -87,10 +87,17 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         args.test_num,
         obs_norm=False,
     )
+    
+    # log
+    args.algo_name = "sac"
+    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
+    log_path = os.path.join(args.logdir, log_name)
+    
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
     args.max_action = env.action_space.high[0]
-    args.algo_name = "sac"
+
+    loguru_logger.add(os.path.join(log_path, "model.log"), rotation="1 MB", retention="10 days", level="DEBUG")
     loguru_logger.info(f"Observations shape: {args.state_shape}")
     loguru_logger.info(f"Actions shape: {args.action_shape}")
     loguru_logger.info(f"Action range: {np.min(env.action_space.low)}, {np.max(env.action_space.high)}")
@@ -157,10 +164,7 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
     buffer = VectorReplayBuffer(args.buffer_size, len(train_envs))
     train_collector = Collector(policy, train_envs, buffer, exploration_noise=True)
     test_collector = Collector(policy, test_envs)
-
-    # log
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed))
-    log_path = os.path.join(args.logdir, log_name)
+    
 
     def save_best_fn(policy: BasePolicy) -> None:
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))
