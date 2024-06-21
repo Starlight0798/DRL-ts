@@ -4,7 +4,7 @@ import numpy as np
 from torch.nn import functional as F
 from loguru import logger
 
-def initialize_weights(layer, init_type='orthogonal', nonlinearity='relu'):
+def initialize_weights(layer, init_type='kaiming', nonlinearity='leaky_relu'):
     if isinstance(layer, (nn.Linear, nn.Conv2d)):
         if init_type == 'kaiming':                  # kaiming初始化，适合激活函数为ReLU, LeakyReLU, PReLU
             nn.init.kaiming_uniform_(layer.weight, nonlinearity=nonlinearity)
@@ -24,7 +24,7 @@ def initialize_weights(layer, init_type='orthogonal', nonlinearity='relu'):
 class MLP(nn.Module):
     def __init__(self,
                  dim_list,
-                 activation=nn.ReLU(inplace=True),
+                 activation=nn.PReLU(),
                  last_act=False,
                  use_norm=False,
                  linear=nn.Linear,
@@ -127,7 +127,7 @@ class ConvBlock(nn.Module):
                  input_shape=(3, 84, 84),
                  use_norm=False,
                  use_depthwise=False,
-                 activation=nn.ReLU(inplace=True)
+                 activation=nn.PReLU()
                  ):
         super(ConvBlock, self).__init__()
         self.conv_layers = nn.Sequential()
