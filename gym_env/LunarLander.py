@@ -16,8 +16,9 @@ from loguru import logger as loguru_logger
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.model import PSCN, MLP
-# from utils.handler import raise_warning
+from utils.model import *
+from utils.handler import print2log, raise_warning
+print2log()
 # raise_warning()
 
 def get_args() -> argparse.Namespace:
@@ -63,8 +64,8 @@ class Net(torch.nn.Module):
     def __init__(self, state_shape, action_shape, device):
         super().__init__()
         self.model = torch.nn.Sequential(
-            PSCN(np.prod(state_shape), 256),
-            MLP([256, 256, 64], last_act=True)
+            DenseBlock(np.prod(state_shape), 64, 4),
+            MLP([np.prod(state_shape) + 256, 256, 64], last_act=True)
         )
         self.output_dim = 64
         self.device = device
@@ -163,11 +164,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         loguru_logger.info(f"Saved best policy to {log_path}")
 
     def stop_fn(mean_rewards: float) -> bool:
-        if env.spec.reward_threshold:
-            return mean_rewards >= env.spec.reward_threshold
-        if "Pong" in args.task:
-            return mean_rewards >= 20
-        return False
+        return mean_rewards >= 290
 
     def save_checkpoint_fn(epoch: int, env_step: int, gradient_step: int) -> str:
         ckpt_path = os.path.join(log_path, "checkpoint.pth")
@@ -183,8 +180,8 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         watch_collector = Collector(policy, watch_env, exploration_noise=True)
         watch_collector.reset()
         loguru_logger.info("Watching agent ...")
-        result = watch_collector.collect(n_episode=1, render=args.render)
-        result.pprint_asdict()
+        result = watch_collector.collect(n_episode=3, render=args.render)
+        loguru_logger.info(f"Watch result:\n {result.pprints_asdict()}")
 
     if args.watch:
         watch()

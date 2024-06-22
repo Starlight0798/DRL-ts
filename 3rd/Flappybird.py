@@ -17,8 +17,9 @@ import flappy_bird_gymnasium
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.model import PSCN, MLP
-# from utils.handler import raise_warning
+from utils.model import *
+from utils.handler import print2log, raise_warning
+print2log()
 # raise_warning()
 
 def get_args() -> argparse.Namespace:
@@ -26,9 +27,9 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--task", type=str, default="FlappyBird-v0")
     parser.add_argument("--seed", type=int, default=4213)
     parser.add_argument("--scale-obs", type=int, default=0)
-    parser.add_argument("--buffer-size", type=int, default=100000)
+    parser.add_argument("--buffer-size", type=int, default=50000)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
-    parser.add_argument("--critic-lr", type=float, default=5e-4)
+    parser.add_argument("--critic-lr", type=float, default=3e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--tau", type=float, default=0.005)
@@ -36,7 +37,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--epoch", type=int, default=100)
-    parser.add_argument("--step-per-epoch", type=int, default=100000)
+    parser.add_argument("--step-per-epoch", type=int, default=50000)
     parser.add_argument("--step-per-collect", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--training-num", type=int, default=10)
@@ -65,7 +66,7 @@ class Net(torch.nn.Module):
         super().__init__()
         self.model = torch.nn.Sequential(
             PSCN(np.prod(state_shape), 512),
-            MLP([512, 256, 64])
+            MLP([512, 256, 64], last_act=True)
         )
         self.output_dim = 64
         self.device = device
@@ -185,8 +186,8 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         watch_collector = Collector(policy, watch_env, exploration_noise=True)
         watch_collector.reset()
         loguru_logger.info("Watching agent ...")
-        result = watch_collector.collect(n_episode=1, render=args.render)
-        result.pprint_asdict()
+        result = watch_collector.collect(n_episode=3, render=args.render)
+        loguru_logger.info(f"Watch result:\n {result.pprints_asdict()}")
 
     if args.watch:
         watch()

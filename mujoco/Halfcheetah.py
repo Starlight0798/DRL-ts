@@ -13,8 +13,9 @@ from loguru import logger as loguru_logger
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.model import PSCN, MLP
-# from utils.handler import raise_warning
+from utils.model import *
+from utils.handler import print2log, raise_warning
+print2log()
 # raise_warning()
 
 def get_args() -> argparse.Namespace:
@@ -27,7 +28,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--tau", type=float, default=0.005)
     parser.add_argument("--alpha", type=float, default=0.2)
-    parser.add_argument("--auto-alpha", default=False, action="store_true")
+    parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--start-timesteps", type=int, default=32000)
     parser.add_argument("--epoch", type=int, default=100)
@@ -45,7 +46,7 @@ def get_args() -> argparse.Namespace:
         default="cuda" if torch.cuda.is_available() else "cpu",
     )
     parser.add_argument("--resume-path", type=str, default=None)
-    parser.add_argument("--resume-id", type=str, default="1")
+    parser.add_argument("--resume-id", type=str, default=None)
     parser.add_argument(
         "--watch",
         default=False,
@@ -175,11 +176,12 @@ def run_sac(args: argparse.Namespace = get_args()) -> None:
         
     def watch() -> None:
         loguru_logger.info("Setup watch envs ...")
+        watch_env.seed(args.seed)
         watch_collector = Collector(policy, watch_env)
         watch_collector.reset()
         loguru_logger.info("Watching agent ...")
-        result = watch_collector.collect(n_episode=1, render=args.render)
-        result.pprint_asdict()
+        result = watch_collector.collect(n_episode=3, render=args.render)
+        loguru_logger.info(f"Watch result:\n {result.pprints_asdict()}")
 
 
     if args.watch:

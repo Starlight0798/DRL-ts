@@ -14,8 +14,9 @@ from loguru import logger as loguru_logger
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.model import PSCN, MLP, ConvBlock
-# from utils.handler import raise_warning
+from utils.model import *, ConvBlock
+from utils.handler import print2log, raise_warning
+print2log()
 # raise_warning()
 
 class Net(torch.nn.Module):
@@ -238,8 +239,8 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         watch_collector = Collector(policy, watch_env, exploration_noise=True)
         watch_collector.reset()
         loguru_logger.info("Watching agent ...")
-        result = watch_collector.collect(n_episode=1, render=args.render)
-        result.pprint_asdict()
+        result = watch_collector.collect(n_episode=3, render=args.render)
+        loguru_logger.info(f"Watch result:\n {result.pprints_asdict()}")
 
     if args.watch:
         watch()
