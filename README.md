@@ -84,30 +84,27 @@ class PSCN(nn.Module):
         return out
 
 
-# conv layer
-class DepthwiseSeparableConv(nn.Module):
-    def __init__(self, 
-                 in_channels, 
-                 out_channels, 
-                 kernel_size=3, 
-                 stride=1, 
-                 padding=2):
-        super(DepthwiseSeparableConv, self).__init__()
-        self.depthwise = nn.Conv2d(in_channels, 
-                                   in_channels, 
-                                   kernel_size, 
-                                   stride, 
-                                   padding, 
-                                   groups=in_channels)
-        self.pointwise = nn.Conv2d(in_channels, 
-                                   out_channels, 
-                                   kernel_size=1)
-        self.apply(initialize_weights)
+# 稠密层(单层)
+class DenseLayer(nn.Module):
+    def __init__(self, in_features, growth_rate):
+        super(DenseLayer, self).__init__()
+        self.fc = MLP([in_features, growth_rate], last_act=True)
 
     def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        return x
+        return torch.cat([x, self.fc(x)], dim=-1)
+
+
+# 稠密层
+class DenseBlock(nn.Module):
+    def __init__(self, in_features, growth_rate, num_layers):
+        super(DenseBlock, self).__init__()
+        layers = []
+        for i in range(num_layers):
+            layers.append(DenseLayer(in_features + i * growth_rate, growth_rate))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x)
 ```
 
 ## 贡献
