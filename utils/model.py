@@ -4,7 +4,7 @@ import numpy as np
 from torch.nn import functional as F
 from loguru import logger
 
-def initialize_weights(layer, init_type='kaiming', nonlinearity='leaky_relu'):
+def initialize_weights(layer, init_type='orthogonal', nonlinearity='relu'):
     if isinstance(layer, (nn.Linear, nn.Conv2d)):
         if init_type == 'kaiming':                  # kaiming初始化，适合激活函数为ReLU, LeakyReLU, PReLU
             nn.init.kaiming_uniform_(layer.weight, nonlinearity=nonlinearity)
@@ -24,7 +24,7 @@ def initialize_weights(layer, init_type='kaiming', nonlinearity='leaky_relu'):
 class MLP(nn.Module):
     def __init__(self,
                  dim_list,
-                 activation=nn.PReLU(),
+                 activation=nn.ReLU(inplace=True),
                  last_act=False,
                  use_norm=False,
                  linear=nn.Linear,
@@ -38,16 +38,101 @@ class MLP(nn.Module):
             layers.append(layer)
             if i < len(dim_list) - 2:
                 if use_norm:
-                    layers.append(nn.LayerNorm(dim_list[i + 1]))
+                    layers.append(nn.BatchNorm1d(dim_list[i + 1]))
                 layers.append(activation)
         if last_act:
             if use_norm:
-                layers.append(nn.LayerNorm(dim_list[-1]))
+                layers.append(nn.BatchNorm1d(dim_list[-1]))
             layers.append(activation)
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.mlp(x)
+    
+    
+# 稠密层(单层)
+class DenseLayer(nn.Module):
+    def __init__(self, in_features, growth_rate):
+        super(DenseLayer, self).__init__()
+        self.fc = MLP([in_features, growth_rate], last_act=True)
+
+    def forward(self, x):
+        return torch.cat([x, self.fc(x)], dim=-1)
+
+
+# 稠密层
+class DenseBlock(nn.Module):
+    def __init__(self, in_features, growth_rate, num_layers):
+        super(DenseBlock, self).__init__()
+        layers = []
+        for i in range(num_layers):
+            layers.append(DenseLayer(in_features + i * growth_rate, growth_rate))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x)
+    
+
+# 残差连接层
+class ResidualLayer(nn.Module):
+    def __init__(self, layer_fn):
+        super(ResidualLayer, self).__init__()
+        self.layer = layer_fn
+
+    def forward(self, x):
+        identity = x
+        out = self.layer(x)
+        out += identity
+        return out
+
+
+# 残差连接块
+class ResidualBlock(nn.Module):
+    def __init__(self, in_features, num_layers):
+        super(ResidualBlock, self).__init__()
+        self.in_features = in_features
+        layers = []
+        for i in range(num_layers):
+            layers.append(ResidualLayer(MLP([in_features, in_features])))
+            layers.append(nn.ReLU(inplace=True))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.layers(x)
+    
+
+# 过渡层
+class SELayer(nn.Module):
+    def __init__(self, channel, reduction=16):
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Sequential(
+            MLP([channel, channel // reduction], bias=False, last_act=True),
+            MLP([channel // reduction, channel], bias=False, last_act=True, activation=nn.Sigmoid()),
+        )
+
+    def forward(self, x):
+        b, c = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c)
+        return x * y.expand_as(x)
+    
+
+
+class AttentionFC(nn.Module):
+    def __init__(self, input_dim, output_dim, attention_dim):
+        super(AttentionFC, self).__init__()
+        self.fc = nn.Linear(input_dim, output_dim)
+        self.attention = nn.Sequential(
+            MLP([input_dim, attention_dim], last_act=True, activation=nn.Tanh()),
+            MLP([attention_dim, 1]),
+            nn.Softmax(dim=1)
+        )
+
+    def forward(self, x):
+        attn_weights = self.attention(x)
+        x = x * attn_weights
+        return self.fc(x)
 
 
 # 带噪声的全连接层
@@ -100,151 +185,16 @@ class NoisyLinear(nn.Module):
         epsilon_j = self.scale_noise(self.out_features)
         self.weight_epsilon.copy_(torch.ger(epsilon_j, epsilon_i))
         self.bias_epsilon.copy_(epsilon_j)
-
-
-# 深度可分离卷积层，参数更少，效率比Conv2d更高
-class DepthwiseSeparableConv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=2):
-        super(DepthwiseSeparableConv, self).__init__()
-        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size, stride, padding, groups=in_channels)
-        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1)
-        self.apply(initialize_weights)
-
-    def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        return x
-
-
-# 卷积网络块
-class ConvBlock(nn.Module):
-    def __init__(self,
-                 channels: list[tuple],
-                 kernel_size: list[int],
-                 stride: list[int],
-                 padding: list[int],
-                 output_dim,
-                 input_shape=(3, 84, 84),
-                 use_norm=False,
-                 use_depthwise=False,
-                 activation=nn.PReLU()
-                 ):
-        super(ConvBlock, self).__init__()
-        self.conv_layers = nn.Sequential()
-        for i, (in_channels, out_channels) in enumerate(channels):
-            if use_depthwise:
-                self.conv_layers.add_module(f'conv_dw_{i}', DepthwiseSeparableConv(in_channels,
-                                                                                   out_channels,
-                                                                                   kernel_size[i],
-                                                                                   stride[i],
-                                                                                   padding[i]))
-            else:
-                self.conv_layers.add_module(f'conv_{i}', nn.Conv2d(in_channels,
-                                                                   out_channels,
-                                                                   kernel_size[i],
-                                                                   stride[i],
-                                                                   padding[i]))
-            if use_norm:
-                self.conv_layers.add_module(f'bn_{i}', nn.BatchNorm2d(out_channels))
-            self.conv_layers.add_module(f'act_{i}', activation)
-            self.conv_layers.add_module(f'pool_{i}', nn.MaxPool2d(kernel_size=(2, 2)))
-            
-        self.output_dim = output_dim
-        self._initialize_fc(input_shape, channels)
-
-    def _initialize_fc(self, input_shape, channels):
-        with torch.no_grad():
-            dummy_input = torch.zeros(1, *input_shape)
-            x = dummy_input
-            for layer in self.conv_layers:
-                x = layer(x)
-            assert len(x.shape) == 4
-            n_features = x.size(1) * x.size(2) * x.size(3)
-            self.fc = MLP([n_features, self.output_dim])
-            logger.info(f'ConvBlock output dim: {n_features}')
-
-
-    def forward(self, x):
-        features = self.conv_layers(x)
-        flat = torch.flatten(features, 1) 
-        out = self.fc(flat)
-        return out
-    
-
-# 位置编码
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=5000):
-        super(PositionalEncoding, self).__init__()
-        # Create a matrix of shape (max_len, d_model)
-        pe = torch.zeros(max_len, d_model)
-        # Create a position index (0, 1, 2, ..., max_len-1)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        # Create a dimension index (0, 1, 2, ..., d_model/2-1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
-        # Apply sine to even indices in the array; 2i
-        pe[:, 0::2] = torch.sin(position * div_term)
-        # Apply cosine to odd indices in the array; 2i+1
-        pe[:, 1::2] = torch.cos(position * div_term)
-        # Add a new dimension to make the shape (1, max_len, d_model)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        # Register the positional encoding matrix as a buffer
-        self.register_buffer('pe', pe)
-        
-    def forward(self, x):
-        # Add positional encoding to input tensor
-        # x shape: (batch_size, seq_len, d_model)
-        x = x + self.pe[:x.size(0), :]
-        return x
-
-
-# 多头注意力机制
-class MultiHeadAttention(nn.Module):
-    def __init__(self, embed_size, num_heads):
-        super(MultiHeadAttention, self).__init__()
-        assert embed_size % num_heads == 0, "Embedding size needs to be divisible by num_heads"
-        
-        self.embed_size = embed_size
-        self.num_heads = num_heads
-        self.head_dim = embed_size // num_heads
-        
-        self.values = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.keys = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.queries = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.fc_out = nn.Linear(num_heads * self.head_dim, embed_size)
-        
-    def forward(self, values, keys, query, mask=None):
-        N = query.shape[0]  # batch size
-        value_len, key_len, query_len = values.shape[1], keys.shape[1], query.shape[1]
-        
-        # Split embedding into self.num_heads pieces
-        values = values.reshape(N, value_len, self.num_heads, self.head_dim)
-        keys = keys.reshape(N, key_len, self.num_heads, self.head_dim)
-        query = query.reshape(N, query_len, self.num_heads, self.head_dim)
-        
-        values = self.values(values)
-        keys = self.keys(keys)
-        queries = self.queries(query)
-        
-        # Attention(Q, K, V) = softmax((Q * K^T) / sqrt(d_k)) * V
-        energy = torch.einsum("nqhd,nkhd->nhqk", [queries, keys])
-        if mask is not None:
-            energy = energy.masked_fill(mask == 0, float("-1e20"))
-        
-        attention = torch.softmax(energy / (self.head_dim ** 0.5), dim=3)
-        out = torch.einsum("nhql,nlhd->nqhd", [attention, values]).reshape(N, query_len, self.num_heads * self.head_dim)
-        
-        out = self.fc_out(out)
-        return out
     
     
 
 # 一种兼顾宽度和深度的全连接层，提取信息效率更高
 class PSCN(nn.Module):
-    def __init__(self, input_dim, output_dim, linear=nn.Linear):
+    def __init__(self, input_dim, output_dim, linear=nn.Linear, use_norm=False):
         super(PSCN, self).__init__()
         assert output_dim >= 32 and output_dim % 8 == 0, "output_dim must be >= 32 and divisible by 8"
         self.hidden_dim = output_dim
-        self.fc1 = MLP([input_dim, self.hidden_dim], last_act=True, linear=linear)
+        self.fc1 = MLP([input_dim, self.hidden_dim], last_act=True, linear=linear, use_norm=use_norm)
         self.fc2 = MLP([self.hidden_dim // 2, self.hidden_dim // 2], last_act=True, linear=linear)
         self.fc3 = MLP([self.hidden_dim // 4, self.hidden_dim // 4], last_act=True, linear=linear)
         self.fc4 = MLP([self.hidden_dim // 8, self.hidden_dim // 8], last_act=True, linear=linear)
@@ -290,53 +240,76 @@ class MLPRNN(nn.Module):
         out = torch.cat([rnn_linear_out, rnn_out], dim=-1)
         return out, rnn_state
     
-
-# convmixer使用的层
-class ConvMixerLayer(nn.Module):
-    def __init__(self, dim, kernel_size = 9):
-        super().__init__()
-        self.Resnet = nn.Sequential(
-            nn.Conv2d(dim, dim, kernel_size = kernel_size, groups = dim, padding = 'same'),
-            nn.GELU(),
-            nn.BatchNorm2d(dim)
-        )
-        self.Conv_1x1 = nn.Sequential(
-            nn.Conv2d(dim, dim, kernel_size = 1),
-            nn.GELU(),
-            nn.BatchNorm2d(dim)
-        )
-
-    def forward(self, x):
-        x = x + self.Resnet(x)
-        x = self.Conv_1x1(x)
-        return x
-
-
-# 残差卷积网络块
-class ConvMixer(nn.Module):
-    def __init__(self, dim, depth, kernel_size = 9, patch_size = 7, output = 512):
-        super().__init__()
-        self.conv2d1 = nn.Sequential(
-            nn.Conv2d(3, dim, kernel_size = patch_size, stride = patch_size),
-            nn.GELU(),
-            nn.BatchNorm2d(dim)
-        )
-        self.ConvMixer_blocks = nn.ModuleList([])
-
-        for _ in range(depth):
-            self.ConvMixer_blocks.append(ConvMixerLayer(dim = dim, kernel_size = kernel_size))
-
-        self.head = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(),
-            nn.Linear(dim, output)
-        )
+    
+    
+# 深度可分离卷积层，参数更少，效率比Conv2d更高
+class DepthwiseSeparableConv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=2):
+        super(DepthwiseSeparableConv, self).__init__()
+        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size, stride, padding, groups=in_channels)
+        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1)
         self.apply(initialize_weights)
 
     def forward(self, x):
-        x = self.conv2d1(x)
-        for ConvMixer_block in self.ConvMixer_blocks:
-            x = ConvMixer_block(x)
-        x = self.head(x)
+        x = self.depthwise(x)
+        x = self.pointwise(x)
         return x
+
+
+# 卷积网络块
+class ConvBlock(nn.Module):
+    def __init__(self,
+                 channels: list[tuple],
+                 kernel_size: list[int],
+                 stride: list[int],
+                 padding: list[int],
+                 output_dim,
+                 input_shape=(3, 84, 84),
+                 use_norm=False,
+                 use_depthwise=False,
+                 activation=nn.ReLU(inplace=True)
+                 ):
+        super(ConvBlock, self).__init__()
+        self.conv_layers = nn.Sequential()
+        for i, (in_channels, out_channels) in enumerate(channels):
+            if use_depthwise:
+                self.conv_layers.add_module(f'conv_dw_{i}', DepthwiseSeparableConv(in_channels,
+                                                                                   out_channels,
+                                                                                   kernel_size[i],
+                                                                                   stride[i],
+                                                                                   padding[i]))
+            else:
+                self.conv_layers.add_module(f'conv_{i}', nn.Conv2d(in_channels,
+                                                                   out_channels,
+                                                                   kernel_size[i],
+                                                                   stride[i],
+                                                                   padding[i]))
+            if use_norm:
+                self.conv_layers.add_module(f'bn_{i}', nn.BatchNorm2d(out_channels))
+            self.conv_layers.add_module(f'act_{i}', activation)
+            self.conv_layers.add_module(f'pool_{i}', nn.MaxPool2d(kernel_size=(2, 2)))
+            
+        self.output_dim = output_dim
+        self._initialize_fc(input_shape, channels)
+
+    def _initialize_fc(self, input_shape, channels):
+        with torch.no_grad():
+            dummy_input = torch.zeros(1, *input_shape)
+            x = dummy_input
+            for layer in self.conv_layers:
+                x = layer(x)
+            assert len(x.shape) == 4
+            n_features = x.size(1) * x.size(2) * x.size(3)
+            self.fc = MLP([n_features, self.output_dim])
+            logger.info(f'ConvBlock output dim: {n_features}')
+
+
+    def forward(self, x):
+        features = self.conv_layers(x)
+        flat = torch.flatten(features, 1) 
+        out = self.fc(flat)
+        return out
+    
+
+
 
