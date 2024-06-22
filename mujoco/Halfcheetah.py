@@ -63,8 +63,8 @@ class Net(torch.nn.Module):
         if concat:
             input_dim += np.prod(action_shape)
         self.model = torch.nn.Sequential(
-            PSCN(input_dim, 256),
-            MLP([256, 256, 64], last_act=True)
+            DenseBlock(input_dim, 64, 4),
+            MLP([input_dim + 64 * 4, 256, 64], last_act=True)
         )
         self.output_dim = 64
         self.device = device
