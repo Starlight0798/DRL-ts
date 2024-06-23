@@ -330,7 +330,7 @@ class ConvBlock(nn.Module):
                 x = layer(x)
             assert len(x.shape) == 4
             n_features = x.size(1) * x.size(2) * x.size(3)
-            self.fc = MLP([n_features, self.output_dim])
+            self.fc = MLP([n_features, self.output_dim], last_act=True)
             logger.info(f'ConvBlock output dim: {n_features}')
 
 

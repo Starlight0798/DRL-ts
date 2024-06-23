@@ -14,7 +14,7 @@ from loguru import logger as loguru_logger
 
 # setup root path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils.model import *, ConvBlock
+from utils.model import *
 from utils.handler import print2log, raise_warning
 print2log()
 # raise_warning()
@@ -22,19 +22,18 @@ print2log()
 class Net(torch.nn.Module):
     def __init__(self, state_shape, action_shape, device):
         super().__init__()
-        self.model = ConvBlock(
-            channels=[(state_shape[0], 32), (32, 64), (64, 64)],
-            kernel_size=[5, 3, 3],
-            stride=[2, 1, 1],
-            padding=[2, 1, 1],
-            output_dim=512,
-            input_shape=state_shape,
-            use_depthwise=True,
-        )
         self.model = torch.nn.Sequential(
-            self.model,
-            PSCN(512, 512),
-            MLP([512, 128], last_act=True)
+            ConvBlock(
+                channels=[(state_shape[0], 32), (32, 64), (64, 64)],
+                kernel_size=[5, 3, 3],
+                stride=[2, 1, 1],
+                padding=[2, 1, 1],
+                output_dim=512,
+                input_shape=state_shape,
+                use_depthwise=True,
+            ),
+            DenseBlock(512, 64, 4),
+            MLP([512 + 64 * 4, 256, 128], last_act=True)
         )
         self.output_dim = 128
         self.device = device
@@ -52,7 +51,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--task", type=str, default="MsPacmanNoFrameskip-v4")
     parser.add_argument("--seed", type=int, default=4213)
     parser.add_argument("--scale-obs", type=int, default=1)
-    parser.add_argument("--buffer-size", type=int, default=100000)
+    parser.add_argument("--buffer-size", type=int, default=200000)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
     parser.add_argument("--critic-lr", type=float, default=5e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
@@ -65,7 +64,6 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--step-per-epoch", type=int, default=100000)
     parser.add_argument("--step-per-collect", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--hidden-size", type=int, default=512)
     parser.add_argument("--training-num", type=int, default=10)
     parser.add_argument("--test-num", type=int, default=10)
     parser.add_argument("--rew-norm", type=int, default=False)
