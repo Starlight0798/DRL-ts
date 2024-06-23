@@ -27,9 +27,9 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--task", type=str, default="FlappyBird-v0")
     parser.add_argument("--seed", type=int, default=4213)
     parser.add_argument("--scale-obs", type=int, default=0)
-    parser.add_argument("--buffer-size", type=int, default=50000)
+    parser.add_argument("--buffer-size", type=int, default=200000)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
-    parser.add_argument("--critic-lr", type=float, default=3e-4)
+    parser.add_argument("--critic-lr", type=float, default=5e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--tau", type=float, default=0.005)
@@ -37,7 +37,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
     parser.add_argument("--epoch", type=int, default=100)
-    parser.add_argument("--step-per-epoch", type=int, default=50000)
+    parser.add_argument("--step-per-epoch", type=int, default=100000)
     parser.add_argument("--step-per-collect", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--training-num", type=int, default=10)
@@ -64,9 +64,10 @@ def get_args() -> argparse.Namespace:
 class Net(torch.nn.Module):
     def __init__(self, state_shape, action_shape, device):
         super().__init__()
+        input_dim = np.prod(state_shape)
         self.model = torch.nn.Sequential(
-            PSCN(np.prod(state_shape), 512),
-            MLP([512, 256, 64], last_act=True)
+            DenseBlock(input_dim, 64, 6),
+            MLP([input_dim + 64 * 6, 256, 64], last_act=True)
         )
         self.output_dim = 64
         self.device = device
