@@ -20,6 +20,11 @@ def initialize_weights(layer, init_type='orthogonal', nonlinearity='relu'):
     return layer
 
 
+# swish激活函数
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
 # 全连接层
 class MLP(nn.Module):
     def __init__(self,
@@ -100,6 +105,31 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         return self.layers(x)
     
+    
+# 残差稠密层
+class ResidualDenseLayer(nn.Module):
+    def __init__(self, in_features, growth_rate, num_layers):
+        super(ResidualDenseLayer, self).__init__()
+        self.layer = ResidualLayer(
+            nn.Sequential(
+                DenseBlock(in_features, growth_rate, num_layers),
+                MLP([in_features + growth_rate * num_layers, in_features])
+            )
+        )
+
+    def forward(self, x):
+        return self.layer(x)
+    
+    
+# 残差稠密块
+class ResidualDenseBlock(nn.Module):
+    def __init__(self, in_features, growth_rate, num_layers, num_blocks):
+        super(ResidualDenseBlock, self).__init__()
+        self.layers = nn.Sequential(*[ResidualDenseLayer(in_features, growth_rate, num_layers) for _ in range(num_blocks)])
+
+    def forward(self, x):
+        return self.layers(x)
+    
 
 # 过渡层
 class SELayer(nn.Module):
@@ -107,32 +137,32 @@ class SELayer(nn.Module):
         super(SELayer, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Sequential(
-            MLP([channel, channel // reduction], bias=False, last_act=True),
-            MLP([channel // reduction, channel], bias=False, last_act=True, activation=nn.Sigmoid()),
+            MLP([channel, channel // reduction], bias=False),
+            nn.ReLU(inplace=True),
+            MLP([channel // reduction, channel], bias=False),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
         b, c = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c)
-        return x * y.expand_as(x)
-    
+        y = self.avg_pool(x.unsqueeze(2)).view(b, c)  
+        y = self.fc(y).view(b, c)  
+        return x * y.expand_as(x)  
 
 
-class AttentionFC(nn.Module):
-    def __init__(self, input_dim, output_dim, attention_dim):
-        super(AttentionFC, self).__init__()
-        self.fc = nn.Linear(input_dim, output_dim)
-        self.attention = nn.Sequential(
-            MLP([input_dim, attention_dim], last_act=True, activation=nn.Tanh()),
-            MLP([attention_dim, 1]),
-            nn.Softmax(dim=1)
-        )
+
+# 注意力层
+class AttentionLayer(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(AttentionLayer, self).__init__()
+        self.fc = MLP([in_features, out_features])
+        self.tanh = nn.Tanh()
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
-        attn_weights = self.attention(x)
-        x = x * attn_weights
-        return self.fc(x)
+        attention_weights = self.softmax(self.tanh(self.fc(x)))
+        return torch.bmm(attention_weights.unsqueeze(2), x.unsqueeze(1)).squeeze(2)
+
 
 
 # 带噪声的全连接层
