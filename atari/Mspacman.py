@@ -6,10 +6,10 @@ import torch
 from atari_wrapper import make_atari_env
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.highlevel.logger import LoggerFactoryDefault
-from tianshou.policy import DiscreteSACPolicy, ICMPolicy
+from tianshou.policy import DiscreteSACPolicy
 from tianshou.policy.base import BasePolicy
 from tianshou.trainer import OffpolicyTrainer
-from tianshou.utils.net.discrete import Actor, Critic, IntrinsicCuriosityModule
+from tianshou.utils.net.discrete import Actor, Critic
 from loguru import logger as loguru_logger
 
 # setup root path
@@ -83,24 +83,6 @@ def get_args() -> argparse.Namespace:
         action="store_true",
         help="watch the play of pre-trained policy only",
     )
-    parser.add_argument(
-        "--icm-lr-scale",
-        type=float,
-        default=0.0,
-        help="use intrinsic curiosity module with this lr scale",
-    )
-    parser.add_argument(
-        "--icm-reward-scale",
-        type=float,
-        default=0.01,
-        help="scaling factor for intrinsic curiosity reward",
-    )
-    parser.add_argument(
-        "--icm-forward-loss-weight",
-        type=float,
-        default=0.2,
-        help="weight for the forward model loss in ICM",
-    )
     return parser.parse_args()
 
 
@@ -157,8 +139,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         alpha_optim = torch.optim.Adam([log_alpha], lr=args.alpha_lr)
         args.alpha = (target_entropy, log_alpha, alpha_optim)
 
-    policy: DiscreteSACPolicy | ICMPolicy
-    policy = DiscreteSACPolicy(
+    policy: DiscreteSACPolicy = DiscreteSACPolicy(
         actor=actor,
         actor_optim=actor_optim,
         critic=critic1,
@@ -171,27 +152,6 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
         alpha=args.alpha,
         estimation_step=args.n_step,
     ).to(args.device)
-    if args.icm_lr_scale > 0:
-        feature_net = DQN(*args.state_shape, args.action_shape, args.device, features_only=True)
-        action_dim = np.prod(args.action_shape)
-        feature_dim = feature_net.output_dim
-        icm_net = IntrinsicCuriosityModule(
-            feature_net.net,
-            feature_dim,
-            action_dim,
-            hidden_sizes=[args.hidden_size],
-            device=args.device,
-        )
-        icm_optim = torch.optim.Adam(icm_net.parameters(), lr=args.actor_lr)
-        policy = ICMPolicy(
-            policy=policy,
-            model=icm_net,
-            optim=icm_optim,
-            action_space=env.action_space,
-            lr_scale=args.icm_lr_scale,
-            reward_scale=args.icm_reward_scale,
-            forward_loss_weight=args.icm_forward_loss_weight,
-        ).to(args.device)
         
     # load a previous policy
     if args.resume_path:
