@@ -21,7 +21,7 @@ print2log()
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="Walker2d-v4")
-    parser.add_argument("--seed", type=int, default=1321)
+    parser.add_argument("--seed", type=int, default=1661)
     parser.add_argument("--buffer-size", type=int, default=100000)
     parser.add_argument("--actor-lr", type=float, default=1e-4)
     parser.add_argument("--critic-lr", type=float, default=5e-4)
