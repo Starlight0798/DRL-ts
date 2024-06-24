@@ -4,7 +4,7 @@ pettingzoo
 loguru
 opencv-python
 gym
-gymnasium
+gymnasium==0.29.1
 gymnasium[accept-rom-license]
 gymnasium[atari]
 gymnasium[mujoco]
