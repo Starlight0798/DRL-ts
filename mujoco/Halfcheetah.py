@@ -30,7 +30,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--alpha", type=float, default=0.2)
     parser.add_argument("--auto-alpha", action="store_true", default=False)
     parser.add_argument("--alpha-lr", type=float, default=3e-4)
-    parser.add_argument("--start-timesteps", type=int, default=32000)
+    parser.add_argument("--start-timesteps", type=int, default=25000)
     parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=100000)
     parser.add_argument("--step-per-collect", type=int, default=10)
