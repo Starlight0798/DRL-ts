@@ -43,16 +43,30 @@ class MLP(nn.Module):
             layers.append(layer)
             if i < len(dim_list) - 2:
                 if use_norm:
-                    layers.append(nn.BatchNorm1d(dim_list[i + 1]))
+                    layers.append(nn.LayerNorm(dim_list[i + 1]))
                 layers.append(activation)
         if last_act:
             if use_norm:
-                layers.append(nn.BatchNorm1d(dim_list[-1]))
+                layers.append(nn.LayerNorm(dim_list[-1]))
             layers.append(activation)
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.mlp(x)
+
+
+# 微调层
+class LoRALayer(nn.Module):
+    def __init__(self, linear_layer, rank):
+        super(LoRALayer, self).__init__()
+        self.linear_layer = linear_layer
+        self.rank = rank
+        self.A = nn.Parameter(torch.randn(linear_layer.weight.size(0), rank))
+        self.B = nn.Parameter(torch.randn(rank, linear_layer.weight.size(1)))
+
+    def forward(self, x):
+        W_adjusted = self.linear_layer.weight + torch.matmul(self.A, self.B)
+        return nn.functional.linear(x, W_adjusted, self.linear_layer.bias)
     
     
 # 稠密层(单层)
@@ -216,6 +230,8 @@ class NoisyLinear(nn.Module):
         self.weight_epsilon.copy_(torch.ger(epsilon_j, epsilon_i))
         self.bias_epsilon.copy_(epsilon_j)
     
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.in_features}, {self.out_features})"
     
 
 # 一种兼顾宽度和深度的全连接层，提取信息效率更高
