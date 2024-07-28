@@ -104,7 +104,7 @@ def run_discrete_sac(args: argparse.Namespace = get_args()) -> None:
     args.action_shape = env.action_space.shape or env.action_space.n
     
     # log
-    args.algo_name = "discrete_sac_icm" if args.icm_lr_scale > 0 else "discrete_sac"
+    args.algo_name = "discrete_sac"
     log_name = os.path.join(args.task, args.algo_name, str(args.seed))
     log_path = os.path.join(args.logdir, log_name)
     
