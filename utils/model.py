@@ -29,7 +29,7 @@ class Swish(nn.Module):
 class MLP(nn.Module):
     def __init__(self,
                  dim_list,
-                 activation=nn.ReLU(inplace=True),
+                 activation=nn.PReLU(),
                  last_act=False,
                  use_norm=False,
                  linear=nn.Linear,
@@ -189,11 +189,11 @@ class NoisyLinear(nn.Module):
 
         self.weight_mu = nn.Parameter(torch.FloatTensor(out_features, in_features))
         self.weight_sigma = nn.Parameter(torch.FloatTensor(out_features, in_features))
-        self.register_buffer('weight_epsilon', torch.FloatTensor(out_features, in_features))
+        self.register_buffer('weight_epsilon', torch.FloatTensor(out_features, in_features), persistent=False)
 
         self.bias_mu = nn.Parameter(torch.FloatTensor(out_features))
         self.bias_sigma = nn.Parameter(torch.FloatTensor(out_features))
-        self.register_buffer('bias_epsilon', torch.FloatTensor(out_features))
+        self.register_buffer('bias_epsilon', torch.FloatTensor(out_features), persistent=False)
 
         self.reset_parameters()
         self.reset_noise()
@@ -201,7 +201,7 @@ class NoisyLinear(nn.Module):
     def forward(self, x):
         if self.training:
             self.reset_noise()
-            weight = self.weight_mu + self.weight_sigma.mul(self.weight_epsilon)  # mul是对应元素相乘
+            weight = self.weight_mu + self.weight_sigma.mul(self.weight_epsilon)  
             bias = self.bias_mu + self.bias_sigma.mul(self.bias_epsilon)
 
         else:
@@ -216,58 +216,56 @@ class NoisyLinear(nn.Module):
         self.bias_mu.data.uniform_(-mu_range, mu_range)
 
         self.weight_sigma.data.fill_(self.sigma_init / np.sqrt(self.in_features))
-        self.bias_sigma.data.fill_(self.sigma_init / np.sqrt(self.out_features))  # 这里要除以out_features
-
-    @staticmethod
-    def scale_noise(size):
-        x = torch.randn(size)  # torch.randn产生标准高斯分布
+        self.bias_sigma.data.fill_(self.sigma_init / np.sqrt(self.out_features))  
+        
+    def scale_noise(self, size: int):
+        x = torch.randn(size)  
         x = x.sign().mul(x.abs().sqrt())
         return x
+    
 
     def reset_noise(self):
         epsilon_i = self.scale_noise(self.in_features)
         epsilon_j = self.scale_noise(self.out_features)
         self.weight_epsilon.copy_(torch.ger(epsilon_j, epsilon_i))
         self.bias_epsilon.copy_(epsilon_j)
-    
+        
+
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.in_features}, {self.out_features})"
+        return f"{self.__class__.__name__}(in_features={self.in_features}, out_features={self.out_features}, sigma_init={self.sigma_init})"
     
 
 # 一种兼顾宽度和深度的全连接层，提取信息效率更高
 class PSCN(nn.Module):
-    def __init__(self, input_dim, output_dim, linear=nn.Linear, use_norm=False):
+    def __init__(self, input_dim, output_dim, depth=4, linear=nn.Linear):
         super(PSCN, self).__init__()
-        assert output_dim >= 32 and output_dim % 8 == 0, "output_dim must be >= 32 and divisible by 8"
-        self.hidden_dim = output_dim
-        self.fc1 = MLP([input_dim, self.hidden_dim], last_act=True, linear=linear, use_norm=use_norm)
-        self.fc2 = MLP([self.hidden_dim // 2, self.hidden_dim // 2], last_act=True, linear=linear)
-        self.fc3 = MLP([self.hidden_dim // 4, self.hidden_dim // 4], last_act=True, linear=linear)
-        self.fc4 = MLP([self.hidden_dim // 8, self.hidden_dim // 8], last_act=True, linear=linear)
+        min_dim = 2 ** (depth - 1)
+        assert depth >= 1, "depth must be at least 1"
+        assert output_dim >= min_dim, f"output_dim must be >= {min_dim} for depth {depth}"
+        assert output_dim % min_dim == 0, f"output_dim must be divisible by {min_dim} for depth {depth}"
+        
+        self.layers = nn.ModuleList()
+        self.output_dim = output_dim
+        in_dim, out_dim = input_dim, output_dim
+        
+        for i in range(depth):
+            self.layers.append(MLP([in_dim, out_dim], last_act=True, linear=linear))
+            in_dim = out_dim // 2
+            out_dim //= 2 
 
     def forward(self, x):
-        _shape = x.shape
-        if len(_shape) > 2:
-            x = x.view(-1, _shape[-1])
+        out_parts = []
         
-        x = self.fc1(x)
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i < len(self.layers) - 1:
+                split_size = int(self.output_dim // (2 ** (i + 1)))
+                part, x = torch.split(x, [split_size, split_size], dim=-1)
+                out_parts.append(part)
+            else:
+                out_parts.append(x)
 
-        x1 = x[:, :self.hidden_dim // 2]
-        x = x[:, self.hidden_dim // 2:]
-        x = self.fc2(x)
-
-        x2 = x[:, :self.hidden_dim // 4]
-        x = x[:, self.hidden_dim // 4:]
-        x = self.fc3(x)
-
-        x3 = x[:, :self.hidden_dim // 8]
-        x = x[:, self.hidden_dim // 8:]
-        x4 = self.fc4(x)
-
-        out = torch.cat([x1, x2, x3, x4], dim=1)
-        
-        if len(_shape) > 2:
-            out = out.view(_shape[0], _shape[1], -1)
+        out = torch.cat(out_parts, dim=-1)
         return out
 
 
